@@ -1,0 +1,18 @@
+{
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "files.exclude": {
+    "**/tsconfig.tsbuildinfo": true,
+    "**/*.js": {
+      "when": "$(basename).ts"
+    },
+    "**/*/*.js": {
+      "when": "$(basename).tsx"
+    },
+    "**/*.js.map": {
+      "when": "$(basename)"
+    },
+    "**/*.d.ts": true
+    // "node_modules": true,
+  },
+  "editor.formatOnSave": true
+}
