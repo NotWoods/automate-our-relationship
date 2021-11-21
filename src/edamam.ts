@@ -143,7 +143,7 @@ interface IngredientStructure {
   status: string;
 }
 
-interface NutritionFullRecipeResponse {
+export interface NutritionFullRecipeResponse {
   uri: string;
   yield: number;
   calories: number;
@@ -184,6 +184,7 @@ export class EdamamClient {
     url.searchParams.set('app_key', this.app_key);
 
     const headers = new Headers();
+    headers.set('Content-Type', 'application/json');
     if (recipeTag) {
       headers.set('If-None-Match', recipeTag);
     }
@@ -197,6 +198,7 @@ export class EdamamClient {
     if (response.ok) {
       return response;
     } else {
+      console.error(await response.json());
       throw new Error(`Edamam error ${response.status}`);
     }
   }
