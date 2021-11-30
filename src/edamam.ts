@@ -158,6 +158,10 @@ export interface NutritionFullRecipeResponse {
 
 const BASE_URL = new URL('https://api.edamam.com/');
 
+export class EdamamError extends Error {
+  name = 'EdamamError';
+}
+
 export class EdamamClient {
   private app_id: string;
   private app_key: string;
@@ -198,8 +202,7 @@ export class EdamamClient {
     if (response.ok) {
       return response;
     } else {
-      console.error(await response.json());
-      throw new Error(`Edamam error ${response.status}`);
+      throw new EdamamError(`${response.status}: ${await response.text()}`);
     }
   }
 

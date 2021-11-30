@@ -1,6 +1,6 @@
 import { config } from 'dotenv';
 import { Client } from '@notionhq/client';
-import { EdamamClient, NutritionFullRecipeResponse } from './edamam.js';
+import { EdamamClient, EdamamError } from './edamam.js';
 import { QueryDatabaseResponse } from '@notionhq/client/build/src/api-endpoints';
 import { headingTypes } from './blocks.js';
 
@@ -17,14 +17,22 @@ const edamam = new EdamamClient({
 });
 
 function isShoppingList(block: { plain_text: string }) {
-  return block.plain_text === 'Shopping List';
+  return block.plain_text.trim() === 'Shopping List';
 }
 
 function formatIngredient(ingredient: string) {
-  return ingredient.replaceAll('½', '1/2').replaceAll('⅓', '1/3');
+  return ingredient
+    .replaceAll('½', '1/2')
+    .replaceAll('⅓', '1/3')
+    .replaceAll('¼', '1/4')
+    .replaceAll('¾', '3/4');
 }
 
-async function recipeStats(page_id: string) {
+function formatText(textBlocks: ReadonlyArray<{ plain_text: string }>): string {
+  return textBlocks.map((block) => block.plain_text).join('');
+}
+
+async function recipeStats(page_id: string, url: string) {
   const blocks = await notion.blocks.children.list({
     block_id: page_id,
   });
@@ -55,22 +63,25 @@ async function recipeStats(page_id: string) {
     let continueLoop = true;
     switch (block.type) {
       case 'bulleted_list_item':
-        ingredients.push(block.bulleted_list_item.text[0].plain_text);
+        ingredients.push(formatText(block.bulleted_list_item.text));
         break;
       case 'to_do':
-        ingredients.push(block.to_do.text[0].plain_text);
+        ingredients.push(formatText(block.to_do.text));
         break;
       case 'heading_1':
       case 'heading_2':
       case 'heading_3':
         const thisHeadingLevel = headingTypes[block.type];
         const parentHeadingLevel = headingTypes[heading.type];
-        if (thisHeadingLevel >= parentHeadingLevel) {
+        if (thisHeadingLevel <= parentHeadingLevel) {
           continueLoop = false;
         }
         break;
+      case 'paragraph':
+        // just skip paragraphs, usually subheaders or empty lines
+        break;
       default:
-        console.log('found weird item in shopping list', block);
+        console.log(url, 'found weird item in shopping list', block);
         continueLoop = false;
         break;
     }
@@ -78,26 +89,28 @@ async function recipeStats(page_id: string) {
     if (!continueLoop) break;
   }
 
-  console.log('---', ingredients.join(', \n'), '---');
-
   // Give those ingredients to edamam
-  const nutrition = await edamam.nutrition.fullRecipe({
-    ingr: ingredients.map(formatIngredient),
-  });
+  try {
+    const nutrition = await edamam.nutrition.fullRecipe({
+      ingr: ingredients.map(formatIngredient),
+    });
 
-  // Print the results
-  console.log(`\n\n---\n${page_id}:\n`, nutrition.totalNutrients.FIBTG);
+    const fiber = nutrition.totalNutrients.FIBTG.quantity;
 
-  const fiber = nutrition.totalNutrients.FIBTG.quantity;
-
-  await notion.pages.update({
-    page_id,
-    properties: {
-      Fiber: {
-        number: Number(fiber.toFixed(1)),
+    await notion.pages.update({
+      page_id,
+      properties: {
+        Fiber: {
+          number: Number(fiber.toFixed(1)),
+        },
       },
-    },
-  });
+    });
+  } catch (err) {
+    if (err instanceof EdamamError) {
+      console.error(url, ingredients.map(formatIngredient));
+    }
+    throw err;
+  }
 }
 
 async function allRecipeStats() {
@@ -114,35 +127,47 @@ async function allRecipeStats() {
               contains: 'Rotation',
             },
           },
+          {
+            property: 'Fiber',
+            number: {
+              is_empty: true,
+            },
+          },
         ],
       },
       start_cursor,
     });
 
     start_cursor = recipes.next_cursor ?? undefined;
+    console.log(recipes.results.map((result) => result.url).join('\n'));
 
     // for each recipe (or in parallel)
     const results = await Promise.allSettled(
       recipes.results
         // .filter((result) => result.id === process.env['TEST_PAGE'])
-        .map((result) => recipeStats(result.id)),
+        .map((result) => recipeStats(result.id, result.url)),
     );
 
-    console.error(
-      results
-        .map((result, i) => {
-          switch (result.status) {
-            case 'rejected':
-              return {
-                reason: result.reason,
-                recipe: recipes.results[i],
-              };
-            default:
-              return undefined;
-          }
-        })
-        .filter(Boolean),
-    );
+    const badResults = results
+      .map((result, i) => {
+        switch (result.status) {
+          case 'rejected':
+            const recipe = recipes.results[i];
+            return {
+              reason: result.reason,
+              recipe: {
+                id: recipe.id,
+                url: recipe.url,
+              },
+            };
+          default:
+            return undefined;
+        }
+      })
+      .filter(Boolean);
+
+    console.error(badResults);
+    console.error(`Failed ${badResults.length} recipes`);
   } while (start_cursor != undefined);
 
   // celebrate and kiss tiger

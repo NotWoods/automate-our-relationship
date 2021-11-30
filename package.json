@@ -4,7 +4,8 @@
   "type": "module",
   "main": "src/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --project .",
+    "prestart": "tsc --project .",
     "start": "node src/index.js",
     "format": "prettier **/*.ts --write",
     "test": "echo \"Error: no test specified\" && exit 1"
