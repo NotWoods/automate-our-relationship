@@ -143,9 +143,7 @@ async function allRecipeStats() {
 
     // for each recipe (or in parallel)
     const results = await Promise.allSettled(
-      recipes.results
-        // .filter((result) => result.id === process.env['TEST_PAGE'])
-        .map((result) => recipeStats(result.id, result.url)),
+      recipes.results.map((result) => recipeStats(result.id, result.url)),
     );
 
     const badResults = results
@@ -169,8 +167,6 @@ async function allRecipeStats() {
     console.error(badResults);
     console.error(`Failed ${badResults.length} recipes`);
   } while (start_cursor != undefined);
-
-  // celebrate and kiss tiger
 }
 
 allRecipeStats();
