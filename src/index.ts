@@ -1,7 +1,7 @@
 import { Client } from '@notionhq/client';
 import { QueryDatabaseParameters } from '@notionhq/client/build/src/api-endpoints';
 import { config } from 'dotenv';
-import { EdamamClient, EdamamError } from './edamam/edamam.js';
+import { EdamamClient } from './edamam/edamam.js';
 import { formatIngredient } from './edamam/format.js';
 import {
   extractListItems,
@@ -30,10 +30,9 @@ const edamam = new EdamamClient({
 /**
  * Extract the ingredients from a given Notion page.
  * @param page_id ID of the Notion page.
- * @param url URL of the page, used as an ID for logging.
  * @returns Parsed ingredient structure list.
  */
-async function recipeIngredients(page_id: string, url: string) {
+async function recipeIngredients(page_id: string) {
   const response = await notion.blocks.children.list({
     block_id: page_id,
   });
@@ -45,7 +44,7 @@ async function recipeIngredients(page_id: string, url: string) {
   );
   if (headingIndex === -1) {
     // No shopping list
-    return;
+    return [];
   }
 
   // Get the ingredients in a block
@@ -54,24 +53,23 @@ async function recipeIngredients(page_id: string, url: string) {
   );
 
   // Give those ingredients to edamam
-  try {
-    const nutrition = await edamam.nutrition.fullRecipe({
-      ingr: ingredients,
-    });
+  const nutrition = await edamam.nutrition.fullRecipe({
+    ingr: ingredients,
+  });
 
-    return nutrition.ingredients;
-  } catch (err) {
-    if (err instanceof EdamamError) {
-      console.error(url, ingredients);
-    }
-    throw err;
-  }
+  return nutrition;
 }
 
 class RecipeError extends Error {
   constructor(cause: Error, readonly page: QueryDatabaseResult) {
     super(`Recipe ${page.id} failed: ${cause.message}`, { cause });
   }
+}
+
+function isSettled<T>(
+  result: PromiseSettledResult<T>,
+): result is PromiseFulfilledResult<T> {
+  return result.status === 'fulfilled';
 }
 
 async function allRecipeStats() {
@@ -92,16 +90,19 @@ async function allRecipeStats() {
   for await (const page of databasesQuery(notion, databaseFilter)) {
     const recipePage = page as FullQueryDatabaseResult;
     ingredientJobs.push(
-      recipeIngredients(recipePage.id, recipePage.url).catch((error: Error) => {
+      recipeIngredients(recipePage.id).catch((error: Error) => {
         throw new RecipeError(error, recipePage);
       }),
     );
   }
 
   const results = await Promise.allSettled(ingredientJobs);
+  const goodResults = results.filter(isSettled);
   const badResults = results.filter(
     (result): result is PromiseRejectedResult => result.status === 'rejected',
   );
+
+  console.log(goodResults);
 
   console.error(`Failed ${badResults.length} recipes`);
   console.error(
