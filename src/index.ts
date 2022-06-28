@@ -1,6 +1,6 @@
 import { config } from 'dotenv';
 import { Client } from '@notionhq/client';
-import { EdamamClient, EdamamError } from './edamam.js';
+import { EdamamClient, EdamamError } from './edamam/edamam.js';
 import { QueryDatabaseResponse } from '@notionhq/client/build/src/api-endpoints';
 import { headingTypes } from './blocks.js';
 
@@ -33,11 +33,11 @@ function formatText(textBlocks: ReadonlyArray<{ plain_text: string }>): string {
 }
 
 async function recipeStats(page_id: string, url: string) {
-  const blocks = await notion.blocks.children.list({
+  const blocks = (await notion.blocks.children.list({
     block_id: page_id,
-  });
+  })) as any;
 
-  const headingIndex = blocks.results.findIndex((block) => {
+  const headingIndex = blocks.results.findIndex((block: any) => {
     switch (block.type) {
       case 'heading_1':
         return block.heading_1.text.some(isShoppingList);
@@ -139,11 +139,17 @@ async function allRecipeStats() {
     });
 
     start_cursor = recipes.next_cursor ?? undefined;
-    console.log(recipes.results.map((result) => result.url).join('\n'));
+    console.log(
+      recipes.results
+        .map((result) => (result as { url: string }).url)
+        .join('\n'),
+    );
 
     // for each recipe (or in parallel)
     const results = await Promise.allSettled(
-      recipes.results.map((result) => recipeStats(result.id, result.url)),
+      recipes.results.map((result) =>
+        recipeStats(result.id, (result as { url: string }).url),
+      ),
     );
 
     const badResults = results
@@ -155,7 +161,7 @@ async function allRecipeStats() {
               reason: result.reason,
               recipe: {
                 id: recipe.id,
-                url: recipe.url,
+                url: (recipe as { url: string }).url,
               },
             };
           default:
