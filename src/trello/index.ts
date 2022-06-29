@@ -1,14 +1,23 @@
-import TrelloNodeAPI from 'trello-node-api';
+import { TrelloClient } from './trello.js';
 
 // https://www.npmjs.com/package/trello-node-api
-const trello = new TrelloNodeAPI(
+const trello = new TrelloClient(
   process.env['TRELLO_APP_KEY']!,
   process.env['TRELLO_TOKEN']!,
 );
 
 export async function getRecipeLists(boardId: string) {
-  const response = await trello.board.searchLists(boardId);
-  console.log(response);
+  const [groceryList, ...weekdays] = await trello.boards.lists(boardId);
+  if (weekdays.length !== 7 && weekdays.length !== 5) {
+    throw new Error(
+      `Invalid board, expected 5 or 7 lists, got ${weekdays.length}`,
+    );
+  }
+
+  return {
+    groceryList,
+    weekdays,
+  };
 }
 
 export async function recipesOfTheWeek() {

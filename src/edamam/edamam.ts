@@ -1,11 +1,11 @@
-import { ApiClient, RequestParameters } from '../api-client';
+import { ApiClient, RequestParameters } from '../api-client.js';
 import type {
   DietLabel,
   HealthLabel,
   IngredientStructure,
   NTRCode,
   NutrientStructure,
-} from './types';
+} from './types.js';
 
 interface EdamamOptions {
   app_id: string;

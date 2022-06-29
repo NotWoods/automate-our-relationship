@@ -1,4 +1,4 @@
-import { ApiClient } from '../api-client';
+import { ApiClient } from '../api-client.js';
 
 const BASE_URL = 'https://api.trello.com/';
 
