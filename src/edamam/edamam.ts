@@ -1,3 +1,4 @@
+import { ApiClient, RequestParameters } from '../api-client';
 import type {
   DietLabel,
   HealthLabel,
@@ -9,14 +10,6 @@ import type {
 interface EdamamOptions {
   app_id: string;
   app_key: string;
-}
-
-interface RequestParameters {
-  path: string;
-  method: 'get' | 'post';
-  query?: URLSearchParams;
-  body?: unknown;
-  recipeTag?: string;
 }
 
 interface NutritionFullRecipeRequest {
@@ -50,54 +43,29 @@ export interface NutritionFullRecipeResponse {
   ingredients: { text: string; parsed: IngredientStructure[] }[];
 }
 
-const BASE_URL = new URL('https://api.edamam.com/');
+const BASE_URL = 'https://api.edamam.com/';
 
-export class EdamamError extends Error {
-  name = 'EdamamError';
-}
-
-export class EdamamClient {
-  private app_id: string;
-  private app_key: string;
-
+export class EdamamClient extends ApiClient {
   private recipeTags = new WeakMap<NutritionFullRecipeRequest, string>();
 
   constructor(options: EdamamOptions) {
-    this.app_id = options.app_id;
-    this.app_key = options.app_key;
+    super(BASE_URL, { app_id: options.app_id, app_key: options.app_key });
   }
 
-  private async request({
-    path,
-    method,
-    query = new URLSearchParams(),
-    body,
+  protected async request({
     recipeTag,
-  }: RequestParameters): Promise<Response> {
-    const url = new URL(path, BASE_URL);
-    for (const [key, value] of query) {
-      url.searchParams.append(key, value);
-    }
-    url.searchParams.set('app_id', this.app_id);
-    url.searchParams.set('app_key', this.app_key);
-
+    ...options
+  }: RequestParameters & { recipeTag?: string }): Promise<Response> {
     const headers = new Headers();
     headers.set('Content-Type', 'application/json');
     if (recipeTag) {
       headers.set('If-None-Match', recipeTag);
     }
 
-    const response = await fetch(url.toString(), {
-      method,
+    return super.request({
+      ...options,
       headers,
-      body: method !== 'get' ? JSON.stringify(body) : undefined,
     });
-
-    if (response.ok) {
-      return response;
-    } else {
-      throw new EdamamError(`${response.status}: ${await response.text()}`);
-    }
   }
 
   readonly nutrition = {
