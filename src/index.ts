@@ -1,7 +1,6 @@
 import { Client } from '@notionhq/client';
 import { QueryDatabaseParameters } from '@notionhq/client/build/src/api-endpoints';
 import { config } from 'dotenv';
-import { EdamamClient } from './edamam/edamam.js';
 import { formatIngredient } from './edamam/format.js';
 import {
   extractListItems,
@@ -14,6 +13,7 @@ import {
   FullQueryDatabaseResult,
   QueryDatabaseResult,
 } from './notion/types.js';
+import { getRecipeLists } from './trello/index.js';
 
 config();
 
@@ -22,10 +22,12 @@ const notion = new Client({
   auth: process.env['NOTION_TOKEN'],
 });
 
-const edamam = new EdamamClient({
+/*const edamam = new EdamamClient({
   app_id: process.env['EDAMAM_APP_ID']!,
   app_key: process.env['EDAMAM_APP_KEY']!,
-});
+});*/
+
+const boardId = process.env['TRELLO_BOARD_ID']!;
 
 /**
  * Extract the ingredients from a given Notion page.
@@ -52,7 +54,7 @@ async function recipeIngredients(page_id: string) {
     formatIngredient(formatText(block.rich_text)),
   );
 
-  return ingredients
+  return ingredients;
 }
 
 class RecipeError extends Error {
@@ -67,8 +69,12 @@ function isSettled<T>(
   return result.status === 'fulfilled';
 }
 
-async function getIngredientsFromRecipes(recipes) {
-  const ingredientJobs = recipes.map(recipe => recipeIngredients(recipe.page_id))
+export async function getIngredientsFromRecipes(
+  recipes: { page_id: string }[],
+) {
+  const ingredientJobs = recipes.map((recipe) =>
+    recipeIngredients(recipe.page_id),
+  );
 
   const results = await Promise.allSettled(ingredientJobs);
   const goodResults = results.filter(isSettled);
@@ -91,7 +97,7 @@ async function getIngredientsFromRecipes(recipes) {
 /**
  * Gets all the recipes on from the Notion page.
  */
-export async function allRecipes() : Promise<FullQueryDatabaseResult[]> {
+export async function allRecipes(): Promise<FullQueryDatabaseResult[]> {
   const databaseFilter: QueryDatabaseParameters = {
     database_id: process.env['NOTION_DB']!,
     filter: {
@@ -104,13 +110,13 @@ export async function allRecipes() : Promise<FullQueryDatabaseResult[]> {
     },
   };
 
-  const recipes: FullQueryDatabaseResult[] = []
+  const recipes: FullQueryDatabaseResult[] = [];
   for await (const page of databasesQuery(notion, databaseFilter)) {
     const recipePage = page as FullQueryDatabaseResult;
     recipes.push(recipePage);
   }
 
-  return recipes
+  return recipes;
 }
 
-allRecipes();
+console.log(await getRecipeLists(boardId));
