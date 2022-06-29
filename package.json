@@ -13,6 +13,7 @@
   "dependencies": {
     "@js-temporal/polyfill": "^0.4.1",
     "@notionhq/client": "^1.0.4",
+    "trello-node-api": "^0.0.9",
     "tslib": "^2.4.0"
   },
   "devDependencies": {
