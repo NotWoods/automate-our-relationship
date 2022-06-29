@@ -52,12 +52,7 @@ async function recipeIngredients(page_id: string) {
     formatIngredient(formatText(block.rich_text)),
   );
 
-  // Give those ingredients to edamam
-  const nutrition = await edamam.nutrition.fullRecipe({
-    ingr: ingredients,
-  });
-
-  return nutrition;
+  return ingredients
 }
 
 class RecipeError extends Error {
@@ -72,29 +67,8 @@ function isSettled<T>(
   return result.status === 'fulfilled';
 }
 
-async function allRecipeStats() {
-  const databaseFilter: QueryDatabaseParameters = {
-    database_id: process.env['NOTION_DB']!,
-    filter: {
-      and: [
-        {
-          property: 'Tags',
-          multi_select: { contains: 'Rotation' },
-        },
-      ],
-    },
-  };
-
-  const ingredientJobs: ReturnType<typeof recipeIngredients>[] = [];
-
-  for await (const page of databasesQuery(notion, databaseFilter)) {
-    const recipePage = page as FullQueryDatabaseResult;
-    ingredientJobs.push(
-      recipeIngredients(recipePage.id).catch((error: Error) => {
-        throw new RecipeError(error, recipePage);
-      }),
-    );
-  }
+async function getIngredientsFromRecipes(recipes) {
+  const ingredientJobs = recipes.map(recipe => recipeIngredients(recipe.page_id))
 
   const results = await Promise.allSettled(ingredientJobs);
   const goodResults = results.filter(isSettled);
@@ -114,4 +88,29 @@ async function allRecipeStats() {
   );
 }
 
-allRecipeStats();
+/**
+ * Gets all the recipes on from the Notion page.
+ */
+export async function allRecipes() : Promise<FullQueryDatabaseResult[]> {
+  const databaseFilter: QueryDatabaseParameters = {
+    database_id: process.env['NOTION_DB']!,
+    filter: {
+      and: [
+        {
+          property: 'Tags',
+          multi_select: { contains: 'Rotation' },
+        },
+      ],
+    },
+  };
+
+  const recipes: FullQueryDatabaseResult[] = []
+  for await (const page of databasesQuery(notion, databaseFilter)) {
+    const recipePage = page as FullQueryDatabaseResult;
+    recipes.push(recipePage);
+  }
+
+  return recipes
+}
+
+allRecipes();
