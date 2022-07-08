@@ -1,6 +1,6 @@
 # notion-recipe-stats
 
-Small script to figure out Fiber (or other nutrition info) for recipes stored in Notion. The [Edamam Nutrition Analysis API](https://developer.edamam.com/edamam-nutrition-api-demo) is used to parse the recipes and return nutrition labels.
+Small [Deno](https://deno.land/) script to figure out Fiber (or other nutrition info) for recipes stored in Notion. The [Edamam Nutrition Analysis API](https://developer.edamam.com/edamam-nutrition-api-demo) is used to parse the recipes and return nutrition labels.
 
 ## Notion database
 
@@ -8,23 +8,12 @@ This script is designed to work with a Notion database containing recipes, where
 
 ## Setup
 
-Clone the repository and install Node.js dependencies using `npm install`. Create a `.env` file where API keys will be stored.
+Clone the repository and create a `.env` file where API keys will be stored.
 
 ```sh
 git clone https://github.com/NotWoods/notion-recipe-stats.git
 cd notion-recipe-stats
-npm install
-echo "" > .env
-```
-
-### Edamam
-
-Set up an account with Edamam and find the App ID and App key in your dashboard. Add the following lines to `.env`:
-
-```shell
-# .env
-EDAMAM_APP_ID=<app_id>
-EDAMAM_APP_KEY=<app_key>
+cp .env.example > .env
 ```
 
 ### Notion
@@ -52,4 +41,8 @@ NOTION_DB=<database_id>
 
 ## Running
 
-Run `npm start` to compile the TypeScript code and run the Node.js program.
+To run the Deno program:
+
+```shell
+deno run notion-recipe-randomizer/script.ts --allow-net=api.notion.com,api.trello.com --allow-env --allow-read=./.env,./.env.example
+```

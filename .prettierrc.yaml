@@ -1,7 +1,0 @@
-singleQuote: true
-trailingComma: all
-overrides:
-  - files: '*.html'
-    options:
-      printWidth: 120
-      tabWidth: 2
