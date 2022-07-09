@@ -2,6 +2,7 @@ import { config } from "https://deno.land/std@0.147.0/dotenv/mod.ts";
 import { TrelloClient } from "../api/trello.ts";
 import {
   BlockObject,
+  DatabasePage,
   NotionClient,
   RichTextItemResponse,
 } from "../api/notion.ts";
@@ -107,7 +108,7 @@ async function extractShoppingListItems(blocks: AsyncIterable<BlockObject>) {
 /**
  * Extract the ingredients from the given Notion pages.
  */
-async function getIngredientsFromRecipes(databaseId: string) {
+function getIngredientsFromRecipes(databaseId: string) {
   const recipes = notionApi.queryDatabases(databaseId, {
     filter: {
       and: [
@@ -119,23 +120,7 @@ async function getIngredientsFromRecipes(databaseId: string) {
     },
   });
 
-  const ingredientJobs = await arrayFrom(
-    recipes,
-    async (recipe) => ({
-      // Recipe page
-      recipe,
-      // Shopping list from recipe page contents
-      ingredients: await extractShoppingListItems(
-        notionApi.blockChildren(recipe.id),
-      ),
-    }),
-  );
-
-  const results = await Promise.allSettled(ingredientJobs);
-  const goodResults = results.filter(isFulfilled).map((result) => result.value);
-  const badResults = results.filter(isRejected).map((result) => result.reason);
-
-  return { goodResults, badResults };
+  return arrayFrom(recipes);
 }
 
 /**
@@ -152,48 +137,38 @@ async function getRecipeLists(boardId: string) {
   return { groceryList, weekdays };
 }
 
-const { goodResults, badResults } = await getIngredientsFromRecipes(
+async function addRecipeAsCard(recipe: DatabasePage, idList: string) {
+  const name = await notionApi.retrievePageTitle(recipe.id);
+  await trelloApi.createCard({
+    idList,
+    name,
+    urlSource: recipe.url,
+  });
+}
+
+async function assignRecipesToLists(databaseId: string, boardId: string) {
+  const [recipes, { weekdays }] = await Promise.all([
+    getIngredientsFromRecipes(databaseId),
+    getRecipeLists(boardId),
+  ]);
+
+  const recipesOfTheWeek = shuffleArray(recipes).slice(0, weekdays.length * 2);
+  console.log("Selected recipes");
+
+  // Create 2 cards, lunch and dinner, for each of the weekdays.
+  await Promise.all(weekdays.map(async (weekday, index) => {
+    await trelloApi.archiveAllCardsInList(weekday.id);
+
+    const lunchIndex = index * 2;
+    const dinnerIndex = (index * 2) + 1;
+
+    await addRecipeAsCard(recipesOfTheWeek[lunchIndex], weekday.id);
+    await addRecipeAsCard(recipesOfTheWeek[dinnerIndex], weekday.id);
+    console.log(`Set ${weekday.name}`);
+  }));
+}
+
+await assignRecipesToLists(
   configData["NOTION_DB"],
-);
-
-if (badResults.length > 0) {
-  console.error(`Failed ${badResults.length} recipes`);
-  console.error(
-    badResults.map(({ reason }) => reason),
-  );
-}
-
-// Extract the recipe name.
-function getRecipeName(recipe: any) {
-  return Object.entries(recipe.properties).find((
-    [propName],
-  ) => propName === "Name");
-}
-
-const recipesOfTheWeek = shuffleArray(goodResults).slice(0, 12);
-const { groceryList, weekdays } = await getRecipeLists(
   configData["TRELLO_BOARD_ID"],
 );
-
-/**
- * Create 2 cards, lunch and dinner, for each of the weekday.
- */
-await Promise.all(weekdays.map(async (weekday, index) => {
-  const lunchIndex = index * 2;
-  const dinnerIndex = (index * 2) + 1;
-
-  await Promise.all([
-    trelloApi.createCard({
-      idList: weekday.id,
-      id: lunchIndex.toString(),
-      name: getRecipeName(recipesOfTheWeek[lunchIndex].recipe),
-      url: recipesOfTheWeek[lunchIndex].recipe.url,
-    }),
-    trelloApi.createCard({
-      idList: weekday.id,
-      id: dinnerIndex.toString(),
-      name: getRecipeName(recipesOfTheWeek[dinnerIndex].recipe),
-      url: recipesOfTheWeek[dinnerIndex].recipe.url,
-    }),
-  ]);
-}));

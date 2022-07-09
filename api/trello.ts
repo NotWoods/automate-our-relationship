@@ -32,6 +32,7 @@ interface Card {
 interface CardRequest extends Partial<Card> {
   idList: string;
   pos?: "top" | "bottom" | number;
+  urlSource?: string;
 }
 
 export class TrelloClient extends ApiClient {

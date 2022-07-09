@@ -4,6 +4,7 @@ const BASE_URL = "https://api.notion.com/";
 
 interface CursorResponse<T> {
   next_cursor: string | null;
+  has_more: boolean;
   results: T[];
 }
 
@@ -23,7 +24,7 @@ export interface RichTextItemResponse {
   plain_text: string;
   href?: string;
   annotations: unknown;
-  type: "type" | "mention" | "equation";
+  type: "text" | "mention" | "equation";
 }
 
 interface BaseBlockObject {
@@ -60,11 +61,27 @@ export type BlockObject =
   | TextBlock<"quote">
   | TodoBlock;
 
+interface TitlePropertyItem {
+  object: "property_item";
+  type: "title";
+  id: "title";
+  title: RichTextItemResponse;
+}
+
+function withCursor(startCursor: string | undefined) {
+  const query = new URLSearchParams();
+  if (startCursor !== undefined) {
+    query.set("start_cursor", startCursor);
+  }
+  return query;
+}
+
 export class NotionClient extends ApiClient {
   constructor(token: string) {
     super(BASE_URL, undefined, {
       "Authorization": `Bearer ${token}`,
       "Notion-Version": "2022-06-28",
+      "Content-Type": "application/json",
     });
   }
 
@@ -96,28 +113,38 @@ export class NotionClient extends ApiClient {
       sorts?: unknown[];
     },
   ): AsyncIterableIterator<DatabasePage> {
-    return this.cursorFetch((start_cursor) =>
-      this.fetch(`/v1/databases/${databaseId}/query`, {
+    return this.cursorFetch((start_cursor) => {
+      return this.fetch(`/v1/databases/${databaseId}/query`, {
         method: "post",
+        query: withCursor(start_cursor),
         body: JSON.stringify({
           ...body,
           start_cursor,
+          page_size: 100,
         }),
-      })
-    );
+      });
+    });
   }
 
   /**
    * https://developers.notion.com/reference/get-block-children
    */
   blockChildren(blockId: string): AsyncIterableIterator<BlockObject> {
-    return this.cursorFetch((start_cursor) => {
-      const query = new URLSearchParams();
-      if (start_cursor !== undefined) {
-        query.set("start_cursor", start_cursor);
-      }
+    return this.cursorFetch((startCursor) =>
+      this.fetch(`/v1/blocks/${blockId}/children`, {
+        query: withCursor(startCursor),
+      })
+    );
+  }
 
-      return this.fetch(`/v1/blocks/${blockId}/children`, { query });
-    });
+  /**
+   * https://developers.notion.com/reference/retrieve-a-page-property
+   */
+  async retrievePageTitle(
+    pageId: string,
+  ): Promise<string> {
+    const response = await this.fetch(`/v1/pages/${pageId}/properties/title`);
+    const list: { results: TitlePropertyItem[] } = await response.json();
+    return list.results[0].title.plain_text;
   }
 }
