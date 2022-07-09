@@ -91,8 +91,9 @@ export class NotionClient extends ApiClient {
    */
   private async *cursorFetch<T>(
     getPage: (start_cursor: string | undefined) => Promise<Response>,
+    start?: string,
   ) {
-    let start_cursor: string | undefined = undefined;
+    let start_cursor: string | undefined = start;
     do {
       const response = await getPage(start_cursor);
       const page: CursorResponse<T> = await response.json();
@@ -129,11 +130,16 @@ export class NotionClient extends ApiClient {
   /**
    * https://developers.notion.com/reference/get-block-children
    */
-  blockChildren(blockId: string): AsyncIterableIterator<BlockObject> {
-    return this.cursorFetch((startCursor) =>
-      this.fetch(`/v1/blocks/${blockId}/children`, {
-        query: withCursor(startCursor),
-      })
+  blockChildren(
+    blockId: string,
+    startId?: string,
+  ): AsyncIterableIterator<BlockObject> {
+    return this.cursorFetch(
+      (startCursor) =>
+        this.fetch(`/v1/blocks/${blockId}/children`, {
+          query: withCursor(startCursor),
+        }),
+      startId,
     );
   }
 

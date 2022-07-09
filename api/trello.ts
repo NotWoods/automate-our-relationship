@@ -30,6 +30,14 @@ interface Card {
   cover: { type: "external"; external: { url: string } } | null;
 }
 
+interface Checklist {
+  id: string;
+  name: string;
+  idBoard: string;
+  idCard: string;
+  checkItems: unknown[];
+}
+
 interface CardRequest extends Partial<Card> {
   idList: string;
   pos?: "top" | "bottom" | number;
@@ -100,7 +108,7 @@ export class TrelloClient extends ApiClient {
   /**
    * https://developer.atlassian.com/cloud/trello/rest/api-group-cards/#api-cards-id-checklists-post
    */
-  async createChecklistOnCard(cardId: string): Promise<string> {
+  async createChecklistOnCard(cardId: string): Promise<Checklist> {
     const response = await this.fetch(`/1/cards/${cardId}/checklists`, {
       method: "post",
       query: new URLSearchParams({ name: "Grocery List" }),

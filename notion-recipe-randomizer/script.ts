@@ -17,14 +17,11 @@ const trelloApi = new TrelloClient(
 
 /**
  * Consume the iterable of Notion blocks until reaching a heading with the given text.
- * @param blocks Blocks from a Notion page.
+ * @param parentId Id of a Notion page.
  * @param searchTerm Search term as regular expression.
  */
-async function moveToHeading(
-  blocks: AsyncIterable<BlockObject>,
-  searchTerm: RegExp,
-) {
-  for await (const block of blocks) {
+async function findHeading(parentId: string, searchTerm: RegExp) {
+  for await (const block of notionApi.blockChildren(parentId)) {
     let richText: { rich_text: RichTextItemResponse[] };
     switch (block.type) {
       case "heading_1":
@@ -55,8 +52,8 @@ const headingLevels = {
 /**
  * Extract the shopping list item blocks from all the blocks in a page.
  */
-async function extractShoppingListItems(blocks: AsyncIterable<BlockObject>) {
-  const listHeading = await moveToHeading(blocks, /shopping list/i);
+async function extractShoppingListItems(recipeId: string) {
+  const listHeading = await findHeading(recipeId, /shopping list/i);
   if (!listHeading) {
     // No shopping list
     return [];
@@ -64,7 +61,11 @@ async function extractShoppingListItems(blocks: AsyncIterable<BlockObject>) {
 
   // Get the ingredients in a block
   const ingredients: { rich_text: RichTextItemResponse[] }[] = [];
-  for await (const block of blocks) {
+  for await (const block of notionApi.blockChildren(recipeId, listHeading.id)) {
+    if (block.id === listHeading.id) {
+      continue;
+    }
+
     let continueLoop = true;
     switch (block.type) {
       // Add list items to result list
@@ -146,28 +147,41 @@ async function addRecipeAsCard(recipe: DatabasePage, idList: string) {
   });
 
   if (recipe.cover) {
-    await trelloApi.createAttachmentOnCard(card.id, {
-      url: recipe.cover.external.url,
-      setCover: true,
-    });
+    try {
+      await trelloApi.createAttachmentOnCard(card.id, {
+        url: recipe.cover.external.url,
+        setCover: true,
+      });
+    } catch (error) {
+      console.warn(
+        "Failed to add cover to card",
+        card.name,
+        recipe.cover,
+        error,
+      );
+    }
   }
 }
 
 async function addIngredientsAsCard(recipes: DatabasePage[], idList: string) {
-  await Promise.all(recipes.map(async (recipe) => {
-    const blockObjects = notionApi.blockChildren(recipe.id);
-    const shoppingListItems = extractShoppingListItems(blockObjects);
+  const shoppingListItems = Promise.all(
+    recipes.map((recipe) => extractShoppingListItems(recipe.id)),
+  )
+    // Merge shopping list items
+    .then((items) => items.flat());
 
-    const card = await trelloApi.createCard({
-      idList,
-      name: "Grocery List",
-      urlSource: recipe.url,
-    });
-    const checklistId = await trelloApi.createChecklistOnCard(card.id);
-    (await shoppingListItems).forEach((shoppingListItem) => {
-      trelloApi.createCheckItems(checklistId, shoppingListItem);
-    });
-  }));
+  await trelloApi.archiveAllCardsInList(idList);
+  const card = await trelloApi.createCard({
+    idList,
+    name: "Grocery List",
+  });
+  const checklist = await trelloApi.createChecklistOnCard(card.id);
+
+  for (const shoppingListItem of await shoppingListItems) {
+    await trelloApi.createCheckItems(checklist.id, shoppingListItem);
+  }
+
+  console.log("Set grocery list");
 }
 
 async function assignRecipesToLists(databaseId: string, boardId: string) {
@@ -178,6 +192,11 @@ async function assignRecipesToLists(databaseId: string, boardId: string) {
 
   const recipesOfTheWeek = shuffleArray(recipes).slice(0, weekdays.length * 2);
   console.log("Selected recipes");
+
+  const groceryListDone = addIngredientsAsCard(
+    recipesOfTheWeek,
+    groceryList.id,
+  );
 
   // Create 2 cards for each of the weekdays for lunch and dinner.
   await Promise.all(weekdays.map(async (weekday, index) => {
@@ -192,7 +211,7 @@ async function assignRecipesToLists(databaseId: string, boardId: string) {
   }));
 
   // Create a card for grocery list.
-  await addIngredientsAsCard(recipesOfTheWeek, groceryList.id);
+  await groceryListDone;
 }
 
 await assignRecipesToLists(
