@@ -1,10 +1,10 @@
 import { config } from "https://deno.land/std@0.147.0/dotenv/mod.ts";
-import { TrelloClient } from "./api/trello.ts";
+import { TrelloClient } from "../api/trello.ts";
 import {
   BlockObject,
   NotionClient,
   RichTextItemResponse,
-} from "./api/notion.ts";
+} from "../api/notion.ts";
 import { arrayFrom, isFulfilled, isRejected, shuffleArray } from "./utils.ts";
 
 const configData = await config({ safe: true, defaults: undefined });
