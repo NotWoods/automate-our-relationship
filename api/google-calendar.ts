@@ -1,7 +1,11 @@
 import { Temporal } from "https://cdn.skypack.dev/@js-temporal/polyfill?dts";
+import { Status } from "https://deno.land/std@0.147.0/http/http_status.ts";
+import { serve, ServeInit } from "https://deno.land/std@0.147.0/http/server.ts";
 import { ApiClient } from "./api-client.ts";
+import { launchBrowser, listenForOauthRedirect } from "./oauth.ts";
 
 const BASE_URL = "https://www.googleapis.com/";
+const REDIRECT_PATH = "/auth";
 
 /** Convert any ZonedDateTimes in an object to strings, recursively */
 export type MapDateTimes<T> = {
@@ -51,8 +55,46 @@ export function isErrors<T>(
 }
 
 export class GoogleCalendarClient extends ApiClient {
-  constructor() {
+  constructor(
+    private readonly clientId: string,
+    private readonly authPort: number = 8000,
+  ) {
     super(BASE_URL);
+  }
+
+  async authorize() {
+    // Direct to Google's OAuth 2.0 server
+    launchBrowser(
+      this.getAuthorizationUrl({
+        scopes: [
+          "https://www.googleapis.com/auth/calendar.readonly",
+        ],
+      }),
+    );
+    // Handle the OAuth 2.0 server response
+    const code = await listenForOauthRedirect(REDIRECT_PATH, undefined, {
+      port: this.authPort,
+    });
+    // Exchange authorization code for refresh and access tokens
+  }
+
+  /**
+   * https://developers.google.com/identity/protocols/oauth2/web-server#httprest_1
+   */
+  getAuthorizationUrl(options: { state?: string; scopes: readonly string[] }) {
+    const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+    url.searchParams.set("client_id", this.clientId);
+    url.searchParams.set(
+      "redirect_uri",
+      new URL(REDIRECT_PATH, `http://localhost:${this.authPort}`).href,
+    );
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("scope", options.scopes.join(" "));
+    url.searchParams.set("access_type", "offline");
+    if (options.state) {
+      url.searchParams.set("state", options.state);
+    }
+    return url;
   }
 
   /**
