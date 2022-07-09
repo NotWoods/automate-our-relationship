@@ -1,6 +1,4 @@
 import { Temporal } from "https://cdn.skypack.dev/@js-temporal/polyfill?dts";
-import { Status } from "https://deno.land/std@0.147.0/http/http_status.ts";
-import { serve, ServeInit } from "https://deno.land/std@0.147.0/http/server.ts";
 import { ApiClient } from "./api-client.ts";
 import { launchBrowser, listenForOauthRedirect } from "./oauth.ts";
 
@@ -48,6 +46,23 @@ interface FreeBusyResponse {
   >;
 }
 
+type TokenRequest = {
+  grant_type: "authorization_code";
+  code: string;
+  redirect_uri: string;
+} | {
+  grant_type: "refresh_token";
+  refresh_token: string;
+};
+
+interface TokenResponse {
+  access_token: string;
+  expires_in: number;
+  refresh_token?: string;
+  scope: string;
+  token_type: "Bearer";
+}
+
 export function isErrors<T>(
   object: T | { errors: ErrorData[] },
 ): object is { errors: ErrorData[] } {
@@ -57,36 +72,88 @@ export function isErrors<T>(
 export class GoogleCalendarClient extends ApiClient {
   constructor(
     private readonly clientId: string,
+    private readonly clientSecret: string,
     private readonly authPort: number = 8000,
   ) {
     super(BASE_URL);
   }
 
   async authorize() {
+    const tokens = this.savedTokens;
+    const refresh = tokens?.refresh_token;
+
+    const newTokens = refresh
+      ? await this.authorizeOffline(refresh)
+      : await this.authorizeWithPrompt();
+    this.savedTokens = newTokens;
+  }
+
+  private get savedTokens(): TokenResponse | undefined {
+    try {
+      return JSON.parse(localStorage.getItem("google_tokens")!);
+    } catch {
+      return undefined;
+    }
+  }
+
+  private set savedTokens(tokens: TokenResponse | undefined) {
+    if (tokens === undefined) {
+      localStorage.removeItem("google_tokens");
+    } else {
+      localStorage.setItem("google_tokens", JSON.stringify(tokens));
+    }
+  }
+
+  private async authorizeWithPrompt() {
+    const state = (Math.random() * 10000).toString(16);
+
     // Direct to Google's OAuth 2.0 server
     launchBrowser(
       this.getAuthorizationUrl({
-        scopes: [
-          "https://www.googleapis.com/auth/calendar.readonly",
-        ],
+        state,
+        scopes: ["https://www.googleapis.com/auth/calendar.readonly"],
       }),
     );
     // Handle the OAuth 2.0 server response
-    const code = await listenForOauthRedirect(REDIRECT_PATH, undefined, {
+    const code = await listenForOauthRedirect(REDIRECT_PATH, state, {
       port: this.authPort,
     });
     // Exchange authorization code for refresh and access tokens
+    const tokens = await this.getAccessToken({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: this.redirectUri.href,
+    });
+
+    localStorage.setItem("google_tokens", JSON.stringify(tokens));
+    return tokens;
+  }
+
+  private async authorizeOffline(refresh_token: string) {
+    const tokens = await this.getAccessToken({
+      grant_type: "refresh_token",
+      refresh_token,
+    });
+
+    localStorage.setItem("google_tokens", JSON.stringify(tokens));
+    return tokens;
+  }
+
+  private get redirectUri() {
+    return new URL(REDIRECT_PATH, `http://localhost:${this.authPort}`);
   }
 
   /**
    * https://developers.google.com/identity/protocols/oauth2/web-server#httprest_1
    */
-  getAuthorizationUrl(options: { state?: string; scopes: readonly string[] }) {
+  private getAuthorizationUrl(
+    options: { state?: string; scopes: readonly string[] },
+  ) {
     const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     url.searchParams.set("client_id", this.clientId);
     url.searchParams.set(
       "redirect_uri",
-      new URL(REDIRECT_PATH, `http://localhost:${this.authPort}`).href,
+      this.redirectUri.href,
     );
     url.searchParams.set("response_type", "code");
     url.searchParams.set("scope", options.scopes.join(" "));
@@ -95,6 +162,21 @@ export class GoogleCalendarClient extends ApiClient {
       url.searchParams.set("state", options.state);
     }
     return url;
+  }
+
+  private async getAccessToken(request: TokenRequest): Promise<TokenResponse> {
+    const response = await fetch(`https://oauth2.googleapis.com/token`, {
+      method: "post",
+      body: new URLSearchParams({
+        client_id: this.clientId,
+        client_secret: this.clientSecret,
+        ...request,
+      }),
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    });
+    return await response.json();
   }
 
   /**

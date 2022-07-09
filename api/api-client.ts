@@ -1,3 +1,5 @@
+import { createHttpError } from "https://deno.land/std@0.147.0/http/http_errors.ts";
+
 interface Source {
   entries(): IterableIterator<[string, string]>;
 }
@@ -101,11 +103,7 @@ export abstract class ApiClient {
     if (response.ok) {
       return response;
     } else {
-      throw new HttpError(`${response.status}: ${await response.text()}`);
+      throw createHttpError(response.status, await response.text());
     }
   }
-}
-
-export class HttpError extends Error {
-  name = "HttpError";
 }
