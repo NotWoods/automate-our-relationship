@@ -27,12 +27,19 @@ interface Card {
   idList: string;
   name: string;
   url: string;
+  cover: { type: "external"; external: { url: string } } | null;
 }
 
 interface CardRequest extends Partial<Card> {
   idList: string;
   pos?: "top" | "bottom" | number;
   urlSource?: string;
+}
+
+interface CardAttachmentRequest {
+  name?: string;
+  url: string;
+  setCover?: boolean;
 }
 
 export class TrelloClient extends ApiClient {
@@ -55,6 +62,20 @@ export class TrelloClient extends ApiClient {
     const response = await this.fetch(`/1/cards`, {
       method: "post",
       query: new URLSearchParams(card as unknown as Record<string, string>),
+    });
+    return await response.json();
+  }
+
+  /**
+   * https://developer.atlassian.com/cloud/trello/rest/api-group-cards/#api-cards-id-attachments-post
+   */
+  async createAttachmentOnCard(
+    cardId: string,
+    body: CardAttachmentRequest,
+  ): Promise<Card> {
+    const response = await this.fetch(`/1/cards/${cardId}/attachments`, {
+      method: "post",
+      body: JSON.stringify(body),
     });
     return await response.json();
   }

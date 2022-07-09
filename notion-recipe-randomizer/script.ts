@@ -139,11 +139,18 @@ async function getRecipeLists(boardId: string) {
 
 async function addRecipeAsCard(recipe: DatabasePage, idList: string) {
   const name = await notionApi.retrievePageTitle(recipe.id);
-  await trelloApi.createCard({
+  const card = await trelloApi.createCard({
     idList,
     name,
     urlSource: recipe.url,
   });
+
+  if (recipe.cover) {
+    await trelloApi.createAttachmentOnCard(card.id, {
+      url: recipe.cover.external.url,
+      setCover: true,
+    });
+  }
 }
 
 async function assignRecipesToLists(databaseId: string, boardId: string) {
