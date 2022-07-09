@@ -122,7 +122,9 @@ async function getIngredientsFromRecipes(databaseId: string) {
   const ingredientJobs = await arrayFrom(
     recipes,
     async (recipe) => ({
+      // Recipe page
       recipe,
+      // Shopping list from recipe page contents
       ingredients: await extractShoppingListItems(
         notionApi.blockChildren(recipe.id),
       ),
@@ -161,6 +163,37 @@ if (badResults.length > 0) {
   );
 }
 
-const recipesOfTheWeek = shuffleArray(goodResults).slice(0, 12);
+// Extract the recipe name.
+function getRecipeName(recipe: any) {
+  return Object.entries(recipe.properties).find((
+    [propName],
+  ) => propName === "Name");
+}
 
-// trelloApi.createCard for each recipe
+const recipesOfTheWeek = shuffleArray(goodResults).slice(0, 12);
+const { groceryList, weekdays } = await getRecipeLists(
+  configData["TRELLO_BOARD_ID"],
+);
+
+/**
+ * Create 2 cards, lunch and dinner, for each of the weekday.
+ */
+await Promise.all(weekdays.map(async (weekday, index) => {
+  const lunchIndex = index * 2;
+  const dinnerIndex = (index * 2) + 1;
+
+  await Promise.all([
+    trelloApi.createCard({
+      idList: weekday.id,
+      id: lunchIndex.toString(),
+      name: getRecipeName(recipesOfTheWeek[lunchIndex].recipe),
+      url: recipesOfTheWeek[lunchIndex].recipe.url,
+    }),
+    trelloApi.createCard({
+      idList: weekday.id,
+      id: dinnerIndex.toString(),
+      name: getRecipeName(recipesOfTheWeek[dinnerIndex].recipe),
+      url: recipesOfTheWeek[dinnerIndex].recipe.url,
+    }),
+  ]);
+}));
