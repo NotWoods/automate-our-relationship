@@ -96,4 +96,28 @@ export class TrelloClient extends ApiClient {
       method: "post",
     });
   }
+
+  /**
+   * https://developer.atlassian.com/cloud/trello/rest/api-group-cards/#api-cards-id-checklists-post
+   */
+  async createChecklistOnCard(cardId: string): Promise<string> {
+    const response = await this.fetch(`/1/cards/${cardId}/checklists`, {
+      method: "post",
+      query: new URLSearchParams({ name: "Grocery List" }),
+    });
+    return await response.json();
+  }
+
+  /**
+   * https://developer.atlassian.com/cloud/trello/rest/api-group-checklists/#api-checklists-id-checkitems-post
+   */
+  async createCheckItems(
+    checklistId: string,
+    ingredient: string,
+  ): Promise<void> {
+    await this.fetch(`/1/checklists/${checklistId}/checkItems`, {
+      method: "post",
+      query: new URLSearchParams({ name: ingredient }),
+    });
+  }
 }
