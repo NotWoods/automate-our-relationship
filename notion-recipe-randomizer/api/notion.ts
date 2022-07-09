@@ -111,10 +111,13 @@ export class NotionClient extends ApiClient {
    * https://developers.notion.com/reference/get-block-children
    */
   blockChildren(blockId: string): AsyncIterableIterator<BlockObject> {
-    return this.cursorFetch((start_cursor) =>
-      this.fetch(`/v1/blocks/${blockId}/children`, {
-        body: JSON.stringify({ start_cursor }),
-      })
-    );
+    return this.cursorFetch((start_cursor) => {
+      const query = new URLSearchParams();
+      if (start_cursor !== undefined) {
+        query.set("start_cursor", start_cursor);
+      }
+
+      return this.fetch(`/v1/blocks/${blockId}/children`, { query });
+    });
   }
 }

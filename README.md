@@ -44,5 +44,5 @@ NOTION_DB=<database_id>
 To run the Deno program:
 
 ```shell
-deno run notion-recipe-randomizer/script.ts --allow-net=api.notion.com,api.trello.com --allow-env --allow-read=./.env,./.env.example
+deno run --allow-net --allow-env --allow-read notion-recipe-randomizer/script.ts
 ```
