@@ -2,13 +2,43 @@ import { Status } from "https://deno.land/std@0.147.0/http/http_status.ts";
 import { serve, ServeInit } from "https://deno.land/std@0.147.0/http/server.ts";
 
 /**
+ * Small localStorage wrapper that parses and serializes JSON.
+ */
+export function jsonStorage<T>(key: string) {
+  let cache: T | undefined;
+  return {
+    get() {
+      if (cache === undefined) {
+        try {
+          cache = JSON.parse(localStorage.getItem(key)!);
+        } catch {
+          // Ignore errors parsing JSON
+        }
+      }
+      return cache;
+    },
+    set(value: T | undefined) {
+      cache = value;
+      if (value === undefined) {
+        localStorage.removeItem(key);
+      } else {
+        localStorage.setItem(key, JSON.stringify(value));
+      }
+    },
+  };
+}
+
+/**
  * Opens a URL in the user's default browser.
  * This runs a OS-specific command to open the URL.
  */
 export function launchBrowser(url: URL) {
+  console.log("Opening browser to:", url.href);
   switch (Deno.build.os) {
     case "windows":
-      return Deno.run({ cmd: ["start", url.href] });
+      return Deno.run({
+        cmd: ["cmd", "/c", "start", url.href.replaceAll("&", "^&")],
+      });
     case "darwin":
       return Deno.run({ cmd: ["open", url.href] });
     case "linux":

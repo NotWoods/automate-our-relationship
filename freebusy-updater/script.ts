@@ -6,7 +6,10 @@ import { HomeAssistantClient } from "../api/home-assistant.ts";
 import { isRejected } from "../notion-recipe-randomizer/utils.ts";
 
 const configData = await config({ safe: true, defaults: undefined });
-const googleCalendarApi = new GoogleCalendarClient();
+const googleCalendarApi = new GoogleCalendarClient(
+  configData["GOOGLE_CALENDAR_CLIENT_ID"],
+  configData["GOOGLE_CALENDAR_CLIENT_SECRET"],
+);
 const homeAssistantApi = new HomeAssistantClient(
   configData["HOME_ASSISTANT_URL"],
   configData["HOME_ASSISTANT_TOKEN"],
@@ -81,6 +84,7 @@ async function watchBusyTimes(
   }
 }
 
+await googleCalendarApi.authorize();
 await watchBusyTimes(
   configData["GOOGLE_CALENDAR_ID"],
   configData["HOME_ASSISTANT_SWITCH_ENTITY_ID"],

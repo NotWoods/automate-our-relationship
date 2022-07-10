@@ -1,6 +1,6 @@
 import { Temporal } from "https://cdn.skypack.dev/@js-temporal/polyfill?dts";
 import { ApiClient } from "./api-client.ts";
-import { launchBrowser, listenForOauthRedirect } from "./oauth.ts";
+import { jsonStorage, launchBrowser, listenForOauthRedirect } from "./oauth.ts";
 
 const BASE_URL = "https://www.googleapis.com/";
 const REDIRECT_PATH = "/auth";
@@ -70,6 +70,8 @@ export function isErrors<T>(
 }
 
 export class GoogleCalendarClient extends ApiClient {
+  private savedTokens = jsonStorage<TokenResponse>("google_tokens");
+
   constructor(
     private readonly clientId: string,
     private readonly clientSecret: string,
@@ -78,34 +80,25 @@ export class GoogleCalendarClient extends ApiClient {
     super(BASE_URL);
   }
 
+  /**
+   * Authenticate with Google's OAuth 2.0 server. May prompt the user for login.
+   */
   async authorize() {
-    const tokens = this.savedTokens;
+    const tokens = this.savedTokens.get();
     const refresh = tokens?.refresh_token;
 
     const newTokens = refresh
       ? await this.authorizeOffline(refresh)
       : await this.authorizeWithPrompt();
-    this.savedTokens = newTokens;
+    this.savedTokens.set(newTokens);
   }
 
-  private get savedTokens(): TokenResponse | undefined {
-    try {
-      return JSON.parse(localStorage.getItem("google_tokens")!);
-    } catch {
-      return undefined;
-    }
-  }
-
-  private set savedTokens(tokens: TokenResponse | undefined) {
-    if (tokens === undefined) {
-      localStorage.removeItem("google_tokens");
-    } else {
-      localStorage.setItem("google_tokens", JSON.stringify(tokens));
-    }
+  private get redirectUri() {
+    return new URL(REDIRECT_PATH, `http://localhost:${this.authPort}`);
   }
 
   private async authorizeWithPrompt() {
-    const state = (Math.random() * 10000).toString(16);
+    const state = crypto.randomUUID();
 
     // Direct to Google's OAuth 2.0 server
     launchBrowser(
@@ -119,28 +112,18 @@ export class GoogleCalendarClient extends ApiClient {
       port: this.authPort,
     });
     // Exchange authorization code for refresh and access tokens
-    const tokens = await this.getAccessToken({
+    return this.getAccessToken({
       grant_type: "authorization_code",
       code,
       redirect_uri: this.redirectUri.href,
     });
-
-    localStorage.setItem("google_tokens", JSON.stringify(tokens));
-    return tokens;
   }
 
-  private async authorizeOffline(refresh_token: string) {
-    const tokens = await this.getAccessToken({
+  private authorizeOffline(refresh_token: string) {
+    return this.getAccessToken({
       grant_type: "refresh_token",
       refresh_token,
     });
-
-    localStorage.setItem("google_tokens", JSON.stringify(tokens));
-    return tokens;
-  }
-
-  private get redirectUri() {
-    return new URL(REDIRECT_PATH, `http://localhost:${this.authPort}`);
   }
 
   /**
@@ -186,6 +169,11 @@ export class GoogleCalendarClient extends ApiClient {
     request: FreeBusyRequest,
     signal?: AbortSignal,
   ): Promise<FreeBusyResponse> {
+    const tokens = this.savedTokens.get();
+    if (!tokens) {
+      throw new Error("Must authenticate first");
+    }
+
     const toStringOptions: Temporal.ZonedDateTimeToStringOptions = {
       timeZoneName: "never",
       calendarName: "never",
@@ -195,6 +183,9 @@ export class GoogleCalendarClient extends ApiClient {
     const response = await this.fetch(`/calendar/v3/freeBusy`, {
       method: "post",
       signal,
+      headers: {
+        Authorization: `Bearer ${tokens.access_token}`,
+      },
       body: JSON.stringify({
         ...request,
         timeMin: request.timeMin.toString(toStringOptions),
