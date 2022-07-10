@@ -16,6 +16,19 @@ export type MapDateTimes<T> = {
     : T[K];
 };
 
+interface CalendarListItem {
+  id: string;
+  summary: string;
+  description?: string;
+  summaryOverride?: string;
+  timeZone: string;
+  colorId: string;
+  backgroundColor: string;
+  foregroundColor: string;
+  selected?: boolean;
+  accessRole: string;
+}
+
 interface FreeBusyRequest {
   timeMin: Temporal.Instant;
   timeMax: Temporal.Instant;
@@ -30,7 +43,7 @@ interface ErrorData {
   reason: string;
 }
 
-interface FreeBusyTimes {
+export interface FreeBusyInterval {
   start: Temporal.Instant;
   end: Temporal.Instant;
 }
@@ -42,7 +55,7 @@ interface FreeBusyResponse {
   groups?: Record<string, { errors: ErrorData[] } | { calendars: string[] }>;
   calendars: Record<
     string,
-    { errors: ErrorData[] } | { busy: FreeBusyTimes[] }
+    { errors: ErrorData[] } | { busy: FreeBusyInterval[] }
   >;
 }
 
@@ -61,6 +74,15 @@ interface TokenResponse {
   refresh_token?: string;
   scope: string;
   token_type: "Bearer";
+}
+
+export function temporalIntervals(
+  intervals: readonly MapDateTimes<FreeBusyInterval>[],
+): FreeBusyInterval[] {
+  return intervals.map((interval) => ({
+    start: Temporal.Instant.from(interval.start),
+    end: Temporal.Instant.from(interval.end),
+  }));
 }
 
 export function isErrors<T>(
@@ -198,7 +220,7 @@ export class GoogleCalendarClient extends ApiClient {
   /**
    * https://developers.google.com/calendar/api/v3/reference/calendarList/list
    */
-  async listCalendars(): Promise<unknown[]> {
+  async listCalendars(): Promise<CalendarListItem[]> {
     const response = await this.fetch(`/calendar/v3/users/me/calendarList`, {
       headers: {
         Authorization: `Bearer ${this.savedAccessToken}`,
@@ -243,11 +265,7 @@ export class GoogleCalendarClient extends ApiClient {
             return [id, calendar];
           }
 
-          const busy = calendar.busy.map((busyTime) => ({
-            start: Temporal.Instant.from(busyTime.start),
-            end: Temporal.Instant.from(busyTime.end),
-          }));
-          return [id, { busy }];
+          return [id, { busy: temporalIntervals(calendar.busy) }];
         }),
       ),
     };

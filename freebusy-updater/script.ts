@@ -4,6 +4,7 @@ import { config } from "https://deno.land/std@0.147.0/dotenv/mod.ts";
 import { GoogleCalendarClient, isErrors } from "../api/google-calendar.ts";
 import { HomeAssistantClient } from "../api/home-assistant.ts";
 import { isRejected } from "../notion-recipe-randomizer/utils.ts";
+import { mergeOverlappingIntervals } from "./merge.ts";
 
 const configData = await config({ safe: true, defaults: undefined });
 const googleCalendarApi = new GoogleCalendarClient(
@@ -32,7 +33,7 @@ async function waitUntil(time: Temporal.Instant, signal?: AbortSignal) {
 }
 
 async function watchBusyTimes(
-  calendarId: string,
+  calendarIds: readonly string[],
   switchEntityId: string,
   start: Temporal.Instant,
   end: Temporal.Instant,
@@ -41,17 +42,23 @@ async function watchBusyTimes(
   const busyTimes = await googleCalendarApi.freeBusy({
     timeMin: start,
     timeMax: end,
-    items: [{ id: calendarId }],
+    items: calendarIds.map((id) => ({ id })),
   }, signal);
 
-  const busyTimesList = busyTimes.calendars[calendarId];
-  if (!busyTimesList) {
-    throw new Error(`Could not find data for calendar ${calendarId}`);
-  } else if (isErrors(busyTimesList)) {
-    throw new AggregateError(busyTimesList.errors);
-  }
+  const busyTimesLists = Object.entries(busyTimes.calendars).map(
+    ([id, data]) => {
+      if (isErrors(data)) {
+        console.warn(`Error fetching calendar ${id}`, data.errors);
+        return [];
+      }
+      return data.busy;
+    },
+  );
+  const mergedTimes = mergeOverlappingIntervals(busyTimesLists);
 
-  for (const { start, end } of busyTimesList.busy) {
+  console.log(mergedTimes);
+
+  for (const { start, end } of mergedTimes) {
     const homeAssistantJobs: Promise<unknown>[] = [];
 
     console.log("Waiting until start", start.toLocaleString());
@@ -88,9 +95,17 @@ async function watchBusyTimes(
 }
 
 await googleCalendarApi.authorize();
+
+const calendars = await googleCalendarApi.listCalendars();
+
 await watchBusyTimes(
-  "tigeroakes@gmail.com",
+  calendars
+    .filter((calendar) =>
+      calendar.selected &&
+      !calendar.id.endsWith("#holiday@group.v.calendar.google.com")
+    )
+    .map((calendar) => calendar.id),
   configData["HOME_ASSISTANT_SWITCH_ENTITY_ID"],
   Temporal.Now.instant(),
-  Temporal.Now.zonedDateTimeISO().add({ days: 3 }).toInstant(),
+  Temporal.Now.zonedDateTimeISO().add({ days: 1 }).toInstant(),
 );
