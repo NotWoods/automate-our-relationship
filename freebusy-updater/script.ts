@@ -19,9 +19,9 @@ const homeAssistantApi = new HomeAssistantClient(
  * Resolves after the given time is reached.
  * @returns True if the time was reached, false if the time was in the past.
  */
-async function waitUntil(time: Temporal.ZonedDateTime, signal?: AbortSignal) {
-  const now = Temporal.Now.zonedDateTimeISO();
-  if (Temporal.ZonedDateTime.compare(time, now) < 0) {
+async function waitUntil(time: Temporal.Instant, signal?: AbortSignal) {
+  const now = Temporal.Now.instant();
+  if (Temporal.Instant.compare(time, now) < 0) {
     // This is in the past, so we can just return immediately
     return false;
   }
@@ -34,25 +34,27 @@ async function waitUntil(time: Temporal.ZonedDateTime, signal?: AbortSignal) {
 async function watchBusyTimes(
   calendarId: string,
   switchEntityId: string,
-  start: Temporal.ZonedDateTime,
-  duration: Temporal.DurationLike,
+  start: Temporal.Instant,
+  end: Temporal.Instant,
   signal?: AbortSignal,
 ) {
   const busyTimes = await googleCalendarApi.freeBusy({
     timeMin: start,
-    timeMax: start.add(duration),
+    timeMax: end,
     items: [{ id: calendarId }],
   }, signal);
 
   const busyTimesList = busyTimes.calendars[calendarId];
-  if (isErrors(busyTimesList)) {
+  if (!busyTimesList) {
+    throw new Error(`Could not find data for calendar ${calendarId}`);
+  } else if (isErrors(busyTimesList)) {
     throw new AggregateError(busyTimesList.errors);
   }
 
-  console.log(busyTimesList.busy);
   for (const { start, end } of busyTimesList.busy) {
     const homeAssistantJobs: Promise<unknown>[] = [];
 
+    console.log("Waiting until start", start.toLocaleString());
     if (await waitUntil(start, signal)) {
       const onJob = homeAssistantApi.setState(switchEntityId, {
         state: "on",
@@ -64,6 +66,7 @@ async function watchBusyTimes(
       homeAssistantJobs.push(onJob);
     }
 
+    console.log("Waiting until end", start.toLocaleString());
     if (await waitUntil(end, signal)) {
       const offJob = homeAssistantApi.setState(switchEntityId, {
         state: "off",
@@ -86,8 +89,8 @@ async function watchBusyTimes(
 
 await googleCalendarApi.authorize();
 await watchBusyTimes(
-  configData["GOOGLE_CALENDAR_ID"],
+  "tigeroakes@gmail.com",
   configData["HOME_ASSISTANT_SWITCH_ENTITY_ID"],
-  Temporal.Now.zonedDateTimeISO(),
-  { days: 1 },
+  Temporal.Now.instant(),
+  Temporal.Now.zonedDateTimeISO().add({ days: 3 }).toInstant(),
 );

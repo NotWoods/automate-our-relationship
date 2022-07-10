@@ -5,10 +5,10 @@ import { jsonStorage, launchBrowser, listenForOauthRedirect } from "./oauth.ts";
 const BASE_URL = "https://www.googleapis.com/";
 const REDIRECT_PATH = "/auth";
 
-/** Convert any ZonedDateTimes in an object to strings, recursively */
+/** Convert any Instants in an object to strings, recursively */
 export type MapDateTimes<T> = {
-  // ZonedDateTime -> string
-  [K in keyof T]: T[K] extends Temporal.ZonedDateTime ? string
+  // Instant -> string
+  [K in keyof T]: T[K] extends Temporal.Instant ? string
     // objects -> recursion
     // deno-lint-ignore ban-types
     : T[K] extends object ? MapDateTimes<T[K]>
@@ -17,8 +17,8 @@ export type MapDateTimes<T> = {
 };
 
 interface FreeBusyRequest {
-  timeMin: Temporal.ZonedDateTime;
-  timeMax: Temporal.ZonedDateTime;
+  timeMin: Temporal.Instant;
+  timeMax: Temporal.Instant;
   timeZone?: string;
   groupExpansionMax?: number;
   calendarExpansionMax?: number;
@@ -31,14 +31,14 @@ interface ErrorData {
 }
 
 interface FreeBusyTimes {
-  start: Temporal.ZonedDateTime;
-  end: Temporal.ZonedDateTime;
+  start: Temporal.Instant;
+  end: Temporal.Instant;
 }
 
 interface FreeBusyResponse {
   kind: "calendar#freeBusy";
-  timeMin: Temporal.ZonedDateTime;
-  timeMax: Temporal.ZonedDateTime;
+  timeMin: Temporal.Instant;
+  timeMax: Temporal.Instant;
   groups?: Record<string, { errors: ErrorData[] } | { calendars: string[] }>;
   calendars: Record<
     string,
@@ -69,6 +69,19 @@ export function isErrors<T>(
   return Array.isArray((object as { errors?: unknown }).errors);
 }
 
+function tokenExpired(expiresInEpochSeconds: number) {
+  let expiresIn: Temporal.Instant;
+  try {
+    expiresIn = Temporal.Instant.fromEpochSeconds(expiresInEpochSeconds);
+  } catch {
+    // If Temporal fails to parse the expiration time, it's probably not valid
+    return true;
+  }
+
+  const now = Temporal.Now.instant();
+  return Temporal.Instant.compare(expiresIn, now) <= 0;
+}
+
 export class GoogleCalendarClient extends ApiClient {
   private savedTokens = jsonStorage<TokenResponse>("google_tokens");
 
@@ -87,14 +100,32 @@ export class GoogleCalendarClient extends ApiClient {
     const tokens = this.savedTokens.get();
     const refresh = tokens?.refresh_token;
 
+    if (tokens && !tokenExpired(tokens.expires_in)) {
+      // Token hasn't expired yet
+      return;
+    }
+
     const newTokens = refresh
       ? await this.authorizeOffline(refresh)
       : await this.authorizeWithPrompt();
-    this.savedTokens.set(newTokens);
+
+    const secondsNow = Temporal.Now.instant().epochSeconds;
+    this.savedTokens.set({
+      ...newTokens,
+      expires_in: newTokens.expires_in + secondsNow,
+    });
   }
 
   private get redirectUri() {
     return new URL(REDIRECT_PATH, `http://localhost:${this.authPort}`);
+  }
+
+  private get savedAccessToken() {
+    const tokens = this.savedTokens.get();
+    if (!tokens) {
+      throw new Error("Must authenticate first");
+    }
+    return tokens.access_token;
   }
 
   private async authorizeWithPrompt() {
@@ -112,7 +143,7 @@ export class GoogleCalendarClient extends ApiClient {
       port: this.authPort,
     });
     // Exchange authorization code for refresh and access tokens
-    return this.getAccessToken({
+    return this.requestAccessToken({
       grant_type: "authorization_code",
       code,
       redirect_uri: this.redirectUri.href,
@@ -120,7 +151,7 @@ export class GoogleCalendarClient extends ApiClient {
   }
 
   private authorizeOffline(refresh_token: string) {
-    return this.getAccessToken({
+    return this.requestAccessToken({
       grant_type: "refresh_token",
       refresh_token,
     });
@@ -147,7 +178,9 @@ export class GoogleCalendarClient extends ApiClient {
     return url;
   }
 
-  private async getAccessToken(request: TokenRequest): Promise<TokenResponse> {
+  private async requestAccessToken(
+    request: TokenRequest,
+  ): Promise<TokenResponse> {
     const response = await fetch(`https://oauth2.googleapis.com/token`, {
       method: "post",
       body: new URLSearchParams({
@@ -163,20 +196,26 @@ export class GoogleCalendarClient extends ApiClient {
   }
 
   /**
+   * https://developers.google.com/calendar/api/v3/reference/calendarList/list
+   */
+  async listCalendars(): Promise<unknown[]> {
+    const response = await this.fetch(`/calendar/v3/users/me/calendarList`, {
+      headers: {
+        Authorization: `Bearer ${this.savedAccessToken}`,
+      },
+    });
+    const { items } = await response.json();
+    return items;
+  }
+
+  /**
    * https://developers.google.com/calendar/api/v3/reference/freebusy/query
    */
   async freeBusy(
     request: FreeBusyRequest,
     signal?: AbortSignal,
   ): Promise<FreeBusyResponse> {
-    const tokens = this.savedTokens.get();
-    if (!tokens) {
-      throw new Error("Must authenticate first");
-    }
-
-    const toStringOptions: Temporal.ZonedDateTimeToStringOptions = {
-      timeZoneName: "never",
-      calendarName: "never",
+    const toStringOptions: Temporal.InstantToStringOptions = {
       fractionalSecondDigits: 0,
     };
 
@@ -184,7 +223,7 @@ export class GoogleCalendarClient extends ApiClient {
       method: "post",
       signal,
       headers: {
-        Authorization: `Bearer ${tokens.access_token}`,
+        Authorization: `Bearer ${this.savedAccessToken}`,
       },
       body: JSON.stringify({
         ...request,
@@ -196,8 +235,8 @@ export class GoogleCalendarClient extends ApiClient {
     const freeBusyData: MapDateTimes<FreeBusyResponse> = await response.json();
     return {
       ...freeBusyData,
-      timeMin: Temporal.ZonedDateTime.from(freeBusyData.timeMin),
-      timeMax: Temporal.ZonedDateTime.from(freeBusyData.timeMax),
+      timeMin: Temporal.Instant.from(freeBusyData.timeMin),
+      timeMax: Temporal.Instant.from(freeBusyData.timeMax),
       calendars: Object.fromEntries(
         Object.entries(freeBusyData.calendars).map(([id, calendar]) => {
           if (isErrors(calendar)) {
@@ -205,8 +244,8 @@ export class GoogleCalendarClient extends ApiClient {
           }
 
           const busy = calendar.busy.map((busyTime) => ({
-            start: Temporal.ZonedDateTime.from(busyTime.start),
-            end: Temporal.ZonedDateTime.from(busyTime.end),
+            start: Temporal.Instant.from(busyTime.start),
+            end: Temporal.Instant.from(busyTime.end),
           }));
           return [id, { busy }];
         }),

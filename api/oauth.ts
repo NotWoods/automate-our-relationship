@@ -1,3 +1,4 @@
+import { delay } from "https://deno.land/std@0.147.0/async/delay.ts";
 import { Status } from "https://deno.land/std@0.147.0/http/http_status.ts";
 import { serve, ServeInit } from "https://deno.land/std@0.147.0/http/server.ts";
 
@@ -11,8 +12,8 @@ export function jsonStorage<T>(key: string) {
       if (cache === undefined) {
         try {
           cache = JSON.parse(localStorage.getItem(key)!);
-        } catch {
-          // Ignore errors parsing JSON
+        } catch (error) {
+          console.warn("JSON parsing failed", error);
         }
       }
       return cache;
@@ -105,6 +106,8 @@ export async function listenForOauthRedirect(
       }, serverOptions);
     });
   } finally {
+    // Pause a bit so the Response can be sent
+    await delay(500);
     // Close the server once the promise resolves or rejects.
     controller.abort();
   }
