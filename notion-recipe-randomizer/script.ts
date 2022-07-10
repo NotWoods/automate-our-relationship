@@ -1,7 +1,9 @@
+import { groupBy } from "https://deno.land/std@0.147.0/collections/group_by.ts";
+import { sumOf } from "https://deno.land/std@0.147.0/collections/sum_of.ts";
 import { config } from "https://deno.land/std@0.147.0/dotenv/mod.ts";
+import { EdamamClient } from "../api/edamam.ts";
 import { TrelloClient } from "../api/trello.ts";
 import {
-  BlockObject,
   DatabasePage,
   NotionClient,
   RichTextItemResponse,
@@ -9,6 +11,10 @@ import {
 import { arrayFrom, shuffleArray } from "./utils.ts";
 
 const configData = await config({ safe: true, defaults: undefined });
+const edamamApi = new EdamamClient(
+  configData["EDAMAM_APP_ID"],
+  configData["EDAMAM_APP_KEY"],
+);
 const notionApi = new NotionClient(configData["NOTION_TOKEN"]);
 const trelloApi = new TrelloClient(
   configData["TRELLO_APP_KEY"],
@@ -107,6 +113,62 @@ async function extractShoppingListItems(recipeId: string) {
 }
 
 /**
+ * Merge similar ingredients together using the Edamam API for Natural Language Processing.
+ */
+async function mergeShoppingLists(recipes: DatabasePage[]) {
+  const allLists = await Promise.all(
+    recipes.map((recipe) => extractShoppingListItems(recipe.id)),
+  );
+
+  const ingr = allLists.flat();
+  const { ingredients } = await edamamApi.nutritionDetails({
+    ingr,
+  });
+  if (!ingredients) {
+    console.warn("Edamam API did not return any ingredients");
+    return [];
+  }
+
+  const parsed = ingredients.flatMap((item, i) =>
+    item.parsed ??
+      { food: ingr[i], foodId: "unknown", measure: "", quantity: 0 }
+  );
+  // Group together the same food items
+  const groupsByFood = groupBy(
+    parsed,
+    (ingredient) => ingredient.foodId,
+  );
+
+  return Object.values(groupsByFood).map((ingredients) => {
+    const groupsByMeasure = Object.values(groupBy(
+      ingredients!,
+      (ingredient) => ingredient.measure,
+    ));
+
+    // Return a map of measurement -> total quantity
+    // This way we don't need to worry about merging different units
+    const quantities = new Map(
+      groupsByMeasure.map((ingredients) => {
+        const totalQuantity = sumOf(
+          ingredients!,
+          (ingredient) => ingredient.quantity,
+        );
+
+        return [ingredients![0].measure, totalQuantity];
+      }),
+    );
+
+    const [first] = groupsByMeasure[0]!;
+    return {
+      quantities: quantities,
+      foodId: first.foodId,
+      foodMatch: first.foodMatch,
+      food: first.food,
+    };
+  });
+}
+
+/**
  * Extract all the recipes from Notion pages.
  */
 function getAllRecipes(databaseId: string) {
@@ -163,12 +225,12 @@ async function addRecipeAsCard(recipe: DatabasePage, idList: string) {
   }
 }
 
+/**
+ * Extract all the ingredients from all the given recipes, and add them to a single Trello card.
+ * @param idList The ID of the Trello list to add the card to.
+ */
 async function addIngredientsAsCard(recipes: DatabasePage[], idList: string) {
-  const shoppingListItems = Promise.all(
-    recipes.map((recipe) => extractShoppingListItems(recipe.id)),
-  )
-    // Merge shopping list items
-    .then((items) => items.flat());
+  const shoppingListItemsReady = mergeShoppingLists(recipes);
 
   await trelloApi.archiveAllCardsInList(idList);
   const card = await trelloApi.createCard({
@@ -177,8 +239,18 @@ async function addIngredientsAsCard(recipes: DatabasePage[], idList: string) {
   });
   const checklist = await trelloApi.createChecklistOnCard(card.id);
 
-  for (const shoppingListItem of await shoppingListItems) {
-    await trelloApi.createCheckItems(checklist.id, shoppingListItem);
+  for (const ingredient of await shoppingListItemsReady) {
+    const measurements: string[] = [];
+    for (const [measure, quantity] of ingredient.quantities) {
+      if (quantity > 0) {
+        measurements.push(`${quantity} ${measure}`);
+      }
+    }
+
+    const formatted = `${ingredient.food}: ${measurements.join(" & ")}`;
+
+    // Trello doesn't let us make checklist items in bulk nor in parallel :(
+    await trelloApi.createCheckItems(checklist.id, formatted);
   }
 
   console.log("Set grocery list");
@@ -198,17 +270,21 @@ async function assignRecipesToLists(databaseId: string, boardId: string) {
     groceryList.id,
   );
 
-  // Create 2 cards for each of the weekdays for lunch and dinner.
-  await Promise.all(weekdays.map(async (weekday, index) => {
-    await trelloApi.archiveAllCardsInList(weekday.id);
+  // Reset every list
+  await Promise.all(
+    weekdays.map((weekday) => trelloApi.archiveAllCardsInList(weekday.id)),
+  );
 
+  // Create 2 cards for each of the weekdays for lunch and dinner.
+  // Trello API creates locks so this needs to be done sequentially.
+  for (const [index, weekday] of weekdays.entries()) {
     const lunchIndex = index * 2;
     const dinnerIndex = (index * 2) + 1;
 
     await addRecipeAsCard(recipesOfTheWeek[lunchIndex], weekday.id);
     await addRecipeAsCard(recipesOfTheWeek[dinnerIndex], weekday.id);
     console.log(`Set ${weekday.name}`);
-  }));
+  }
 
   // Create a card for grocery list.
   await groceryListDone;
