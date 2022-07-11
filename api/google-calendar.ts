@@ -6,12 +6,12 @@ const BASE_URL = "https://www.googleapis.com/";
 const REDIRECT_PATH = "/auth";
 
 /** Convert any Instants in an object to strings, recursively */
-export type MapDateTimes<T> = {
+export type InstantsToStrings<T> = {
   // Instant -> string
   [K in keyof T]: T[K] extends Temporal.Instant ? string
     // objects -> recursion
     // deno-lint-ignore ban-types
-    : T[K] extends object ? MapDateTimes<T[K]>
+    : T[K] extends object ? InstantsToStrings<T[K]>
       // fallback to same type
     : T[K];
 };
@@ -77,7 +77,7 @@ interface TokenResponse {
 }
 
 export function temporalIntervals(
-  intervals: readonly MapDateTimes<FreeBusyInterval>[],
+  intervals: readonly InstantsToStrings<FreeBusyInterval>[],
 ): FreeBusyInterval[] {
   return intervals.map((interval) => ({
     start: Temporal.Instant.from(interval.start),
@@ -254,7 +254,8 @@ export class GoogleCalendarClient extends ApiClient {
       }),
     });
 
-    const freeBusyData: MapDateTimes<FreeBusyResponse> = await response.json();
+    const freeBusyData: InstantsToStrings<FreeBusyResponse> = await response
+      .json();
     return {
       ...freeBusyData,
       timeMin: Temporal.Instant.from(freeBusyData.timeMin),
