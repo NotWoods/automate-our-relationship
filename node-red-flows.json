@@ -1,0 +1,483 @@
+[
+    {
+        "id": "2b082403df65a2e7",
+        "type": "tab",
+        "label": "Busy",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "12b7cba0ac6887be",
+        "type": "tab",
+        "label": "Laundry",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "b82f5df.82ce8a",
+        "type": "server",
+        "name": "Home Assistant",
+        "version": 4,
+        "addon": true,
+        "rejectUnauthorizedCerts": true,
+        "ha_boolean": "y|yes|true|on|home|open",
+        "connectionDelay": true,
+        "cacheJson": true,
+        "heartbeat": false,
+        "heartbeatInterval": 30,
+        "areaSelector": "friendlyName",
+        "deviceSelector": "friendlyName",
+        "entitySelector": "friendlyName",
+        "statusSeparator": "at: ",
+        "statusYear": "hidden",
+        "statusMonth": "short",
+        "statusDay": "numeric",
+        "statusHourCycle": "h23",
+        "statusTimeFormat": "h:m"
+    },
+    {
+        "id": "b4ca66a51dc908a8",
+        "type": "google-credentials",
+        "displayName": ""
+    },
+    {
+        "id": "1f7b4dac00759a29",
+        "type": "google calendar in",
+        "z": "2b082403df65a2e7",
+        "google": "b4ca66a51dc908a8",
+        "name": "calendar in: personal",
+        "calendar": "",
+        "offsetType": "at",
+        "offsetFrom": "start",
+        "offset": "10",
+        "offsetUnits": "minutes",
+        "x": 160,
+        "y": 320,
+        "wires": [
+            [
+                "1243fd9f3a912ad5"
+            ]
+        ],
+        "icon": "font-awesome/fa-calendar-o"
+    },
+    {
+        "id": "798cee0d9d2456a0",
+        "type": "api-call-service",
+        "z": "2b082403df65a2e7",
+        "name": "",
+        "server": "b82f5df.82ce8a",
+        "version": 5,
+        "debugenabled": false,
+        "domain": "switch",
+        "service": "turn_on",
+        "areaId": [],
+        "deviceId": [
+            "b29af17ef584fe32def05894a0b94326"
+        ],
+        "entityId": [],
+        "data": "",
+        "dataType": "jsonata",
+        "mergeContext": "",
+        "mustacheAltTags": false,
+        "outputProperties": [],
+        "queue": "none",
+        "x": 1038,
+        "y": 360,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "12a8f8b509808d06",
+        "type": "api-call-service",
+        "z": "2b082403df65a2e7",
+        "name": "",
+        "server": "b82f5df.82ce8a",
+        "version": 5,
+        "debugenabled": false,
+        "domain": "switch",
+        "service": "turn_off",
+        "areaId": [],
+        "deviceId": [
+            "b29af17ef584fe32def05894a0b94326"
+        ],
+        "entityId": [],
+        "data": "",
+        "dataType": "jsonata",
+        "mergeContext": "",
+        "mustacheAltTags": false,
+        "outputProperties": [],
+        "queue": "none",
+        "x": 1240,
+        "y": 440,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "e1769a7f719e4637",
+        "type": "switch",
+        "z": "2b082403df65a2e7",
+        "name": "only busy events",
+        "property": "data.transparency",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "neq",
+                "v": "transparent",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 1,
+        "x": 808,
+        "y": 400,
+        "wires": [
+            [
+                "08d14e212c5acd55",
+                "798cee0d9d2456a0"
+            ]
+        ]
+    },
+    {
+        "id": "08d14e212c5acd55",
+        "type": "function",
+        "z": "2b082403df65a2e7",
+        "name": "setTimeout",
+        "func": "const key = `timer_${msg.topic}`\nconst lastTimer = context.get(key);\n\nlet { end } = msg.data;\n\nif (lastTimer) {\n    // Clear the currently running timer\n    clearTimeout(lastTimer.timeoutId);\n    // Set end to whichever end time is later\n    end = new Date(Math.max(end.getTime(), lastTimer.end));\n}\n\n// Send event after a delay\nconst delay = end.getTime() - Date.now();\nconst timeoutId = setTimeout(() => node.send(msg), delay);\n\ncontext.set(key, {\n    timeoutId,\n    end: end.getTime(),\n});",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1028,
+        "y": 440,
+        "wires": [
+            [
+                "12a8f8b509808d06"
+            ]
+        ]
+    },
+    {
+        "id": "5cf901f0dd73791e",
+        "type": "google calendar in",
+        "z": "2b082403df65a2e7",
+        "google": "b4ca66a51dc908a8",
+        "name": "calendar in: work",
+        "calendar": "r2fgc5s53b26a0ikbsc1pij917p94o1c@import.calendar.google.com",
+        "offsetType": "at",
+        "offsetFrom": "start",
+        "offset": "10",
+        "offsetUnits": "minutes",
+        "x": 140,
+        "y": 360,
+        "wires": [
+            [
+                "1243fd9f3a912ad5"
+            ]
+        ],
+        "icon": "font-awesome/fa-calendar-o"
+    },
+    {
+        "id": "1243fd9f3a912ad5",
+        "type": "change",
+        "z": "2b082403df65a2e7",
+        "name": "",
+        "rules": [
+            {
+                "t": "set",
+                "p": "topic",
+                "pt": "msg",
+                "to": "tiger",
+                "tot": "str"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 390,
+        "y": 380,
+        "wires": [
+            [
+                "a45cd79006601c15"
+            ]
+        ]
+    },
+    {
+        "id": "ab9ea6b607dd6bb8",
+        "type": "change",
+        "z": "2b082403df65a2e7",
+        "name": "",
+        "rules": [
+            {
+                "t": "set",
+                "p": "topic",
+                "pt": "msg",
+                "to": "daphne",
+                "tot": "str"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 390,
+        "y": 420,
+        "wires": [
+            [
+                "a45cd79006601c15"
+            ]
+        ]
+    },
+    {
+        "id": "34dde36c9c62f1e1",
+        "type": "google calendar in",
+        "z": "2b082403df65a2e7",
+        "google": "b4ca66a51dc908a8",
+        "name": "calendar in: personal",
+        "calendar": "daphne.liu97@gmail.com",
+        "offsetType": "at",
+        "offsetFrom": "start",
+        "offset": "10",
+        "offsetUnits": "minutes",
+        "x": 160,
+        "y": 440,
+        "wires": [
+            [
+                "ab9ea6b607dd6bb8"
+            ]
+        ],
+        "icon": "font-awesome/fa-calendar-o"
+    },
+    {
+        "id": "a45cd79006601c15",
+        "type": "time-range-switch",
+        "z": "2b082403df65a2e7",
+        "name": "9am - 5pm",
+        "lat": "",
+        "lon": "",
+        "startTime": "09:00",
+        "endTime": "17:00",
+        "startOffset": 0,
+        "endOffset": 0,
+        "x": 590,
+        "y": 400,
+        "wires": [
+            [
+                "e1769a7f719e4637"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "adfc255e27bf216e",
+        "type": "server-events",
+        "z": "12b7cba0ac6887be",
+        "name": "",
+        "server": "b82f5df.82ce8a",
+        "version": 1,
+        "event_type": "zha_event",
+        "exposeToHomeAssistant": false,
+        "haConfig": [
+            {
+                "property": "name",
+                "value": ""
+            },
+            {
+                "property": "icon",
+                "value": ""
+            }
+        ],
+        "waitForRunning": true,
+        "outputProperties": [
+            {
+                "property": "payload",
+                "propertyType": "msg",
+                "value": "",
+                "valueType": "eventData"
+            },
+            {
+                "property": "topic",
+                "propertyType": "msg",
+                "value": "$outputData(\"eventData\").event_type",
+                "valueType": "jsonata"
+            }
+        ],
+        "x": 550,
+        "y": 360,
+        "wires": [
+            [
+                "ad8d93dafc476809"
+            ]
+        ]
+    },
+    {
+        "id": "ad8d93dafc476809",
+        "type": "switch",
+        "z": "12b7cba0ac6887be",
+        "name": "command: vibration_strength",
+        "property": "payload.event.command",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "vibration_strength",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 1,
+        "x": 800,
+        "y": 360,
+        "wires": [
+            [
+                "9a296379107c26b9"
+            ]
+        ]
+    },
+    {
+        "id": "9a296379107c26b9",
+        "type": "function",
+        "z": "12b7cba0ac6887be",
+        "name": "set topic",
+        "func": "switch (msg.payload.event.device_id) {\n    case '587afb97ab882bd1cdf80e64dc52c2f8':\n        return {\n            ...msg,\n            topic: 'Washer'\n        };\n    case '1732994c20ae41420d6786f2eb6031bc':\n        return {\n            ...msg,\n            topic: 'Dryer'\n        };\n}",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1020,
+        "y": 360,
+        "wires": [
+            [
+                "c6ea202b9e4f471a"
+            ]
+        ]
+    },
+    {
+        "id": "c7b20ba2bfa8f7df",
+        "type": "api-call-service",
+        "z": "12b7cba0ac6887be",
+        "name": "",
+        "server": "b82f5df.82ce8a",
+        "version": 5,
+        "debugenabled": false,
+        "domain": "tts",
+        "service": "google_translate_say",
+        "areaId": [],
+        "deviceId": [],
+        "entityId": [
+            "media_player.kitchen_display"
+        ],
+        "data": "msg.payload",
+        "dataType": "jsonata",
+        "mergeContext": "",
+        "mustacheAltTags": false,
+        "outputProperties": [],
+        "queue": "none",
+        "x": 1630,
+        "y": 360,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "4b5220cce1e584ad",
+        "type": "function",
+        "z": "12b7cba0ac6887be",
+        "name": "set message",
+        "func": "return {\n    payload: {\n        message: `${msg.topic} is done`,\n        language: 'en'\n    }\n}",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1430,
+        "y": 360,
+        "wires": [
+            [
+                "c7b20ba2bfa8f7df"
+            ]
+        ]
+    },
+    {
+        "id": "8609a731f4bfe118",
+        "type": "inject",
+        "z": "12b7cba0ac6887be",
+        "name": "test w/ strength 30",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "test",
+        "payload": "{\"event\":{\"args\":{\"strength\": 30}}}",
+        "payloadType": "json",
+        "x": 630,
+        "y": 860,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "f5891d32cf5e8315",
+        "type": "inject",
+        "z": "12b7cba0ac6887be",
+        "name": "test w/ strength 10",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "test",
+        "payload": "{\"event\":{\"args\":{\"strength\": 10}}}",
+        "payloadType": "json",
+        "x": 630,
+        "y": 820,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "c6ea202b9e4f471a",
+        "type": "function",
+        "z": "12b7cba0ac6887be",
+        "name": "strength < 24",
+        "func": "const key = `last_strength_${msg.topic}`\nconst lastStrength = context.get(key);\nconst { strength } = msg.payload.event.args;\n\nconst threshold = 24;\n\nif (lastStrength >= threshold && strength < threshold) {\n    node.send(msg);\n}\ncontext.set(key, strength);",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1220,
+        "y": 360,
+        "wires": [
+            [
+                "4b5220cce1e584ad"
+            ]
+        ]
+    }
+]
