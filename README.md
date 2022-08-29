@@ -10,7 +10,7 @@ Want to automate your home? Come learn how to sharpen your skills in Node, APIs,
 
 We got tired of putting together a grocery list every week since we have a backlog of go-to recipes. Instead of spending the weekend planning what we’re eating during the week, we wrote a script to automatically pull from our recipe list in Notion, assign meals onto days in our calendar, then add the ingredients onto our grocery list.
 
-- [Our recipe boards on Notion (recipes.tigerxdaphne.com)](https://tigeroakes.notion.site/849553e394454ca9951006edd3bdcfd9?v=61420e4d89e144289d58393786d743a5)
+- [Our delicious recipe board on Notion (recipes.tigerxdaphne.com)](https://tigeroakes.notion.site/849553e394454ca9951006edd3bdcfd9?v=61420e4d89e144289d58393786d743a5)
   - Notion database key is `849553e394454ca9951006edd3bdcfd9`
 - [Our source code](https://github.com/NotWoods/automate-our-relationship/tree/main/notion-recipe-randomizer)
 
