@@ -1,8 +1,8 @@
 # How we automated our relationship
 
-_Tiger Oakes ([@not_woods](https://twitter.com/Not_Woods)) x Daphne Liu ([@thebetterdaphne](https://twitter.com/thebetterdaphne))_
+_Tiger Oakes ([@notwoods@hachyderm.io](https://hachyderm.io/@notwoods)) x Daphne Liu ([@thebetterdaphne@twitter.com](https://twitter.com/thebetterdaphne))_
 
-Want to automate your home? Come learn how to sharpen your skills in Node, APIs, and the Internet of Things while making laundry, cooking, & calendar projects that improve your life and relationship. Resources from our talk at [CascadiaJS 2022](https://2022.cascadiajs.com/speakers/tiger-oakes).
+Want to automate your home? Come learn how to sharpen your skills in Node, APIs, and the Internet of Things while making laundry, cooking, & calendar projects that improve your life and relationship. Resources from our talk at [CascadiaJS 2022](https://2022.cascadiajs.com/speakers/tiger-oakes) and [HalfStack 2023](https://halfstackconf.com/phoenix/#tiger-oakes-and-daphne-liu).
 
 - [Slides](https://docs.google.com/presentation/d/1f2aMU0tW67sW15dOVwZzcDyae4ecegtwYerq_KiTiNM/edit?usp=sharing)
 
