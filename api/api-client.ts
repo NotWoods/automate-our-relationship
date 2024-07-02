@@ -103,7 +103,14 @@ export abstract class ApiClient {
     if (response.ok) {
       return response;
     } else {
-      throw createHttpError(response.status, await response.text());
+      let error: Error;
+      const responseText = await response.text();
+      try {
+        error = createHttpError(response.status, responseText);
+      } catch {
+        error = new Error(responseText);
+      }
+      throw error
     }
   }
 }

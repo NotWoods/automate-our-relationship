@@ -121,9 +121,15 @@ async function mergeShoppingLists(recipes: DatabasePage[]) {
   );
 
   const ingr = allLists.flat();
-  const { ingredients } = await edamamApi.nutritionDetails({
-    ingr,
-  });
+  let result;
+  try {
+    result = await edamamApi.nutritionDetails({
+      ingr,
+    });
+  } catch (error) {
+    console.warn("Failed to get ingredients from Edamam API", error);
+  }
+  const ingredients = result?.ingredients;
   if (!ingredients) {
     console.warn("Edamam API did not return any ingredients");
     return [];
@@ -211,7 +217,7 @@ async function addRecipeAsCard(recipe: DatabasePage, idList: string) {
   if (recipe.cover) {
     try {
       await trelloApi.createAttachmentOnCard(card.id, {
-        url: recipe.cover.external.url,
+        url: recipe.cover[recipe.cover.type].url,
         setCover: true,
       });
     } catch (error) {
