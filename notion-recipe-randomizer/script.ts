@@ -262,19 +262,26 @@ async function addIngredientsAsCard(recipes: DatabasePage[], idList: string) {
   console.log("Set grocery list");
 }
 
-async function assignRecipesToLists(databaseId: string, boardId: string) {
+async function assignRecipesToLists(options: {
+  databaseId: string;
+  boardId: string;
+  mergeIngredients?: boolean;
+}) {
   const [recipes, { groceryList, weekdays }] = await Promise.all([
-    getAllRecipes(databaseId),
-    getRecipeLists(boardId),
+    getAllRecipes(options.databaseId),
+    getRecipeLists(options.boardId),
   ]);
 
   const recipesOfTheWeek = shuffleArray(recipes).slice(0, weekdays.length * 2);
   console.log("Selected recipes");
 
-  const groceryListDone = addIngredientsAsCard(
-    recipesOfTheWeek,
-    groceryList.id,
-  );
+  let groceryListDone: Promise<void> | undefined;
+  if (options.mergeIngredients) {
+    groceryListDone = addIngredientsAsCard(
+      recipesOfTheWeek,
+      groceryList.id,
+    );
+  }
 
   // Reset every list
   await Promise.all(
@@ -296,7 +303,16 @@ async function assignRecipesToLists(databaseId: string, boardId: string) {
   await groceryListDone;
 }
 
-await assignRecipesToLists(
-  configData["NOTION_DB"],
-  configData["TRELLO_BOARD_ID"],
-);
+export async function randomizeRecipes(options: {mergeIngredients?: boolean} = {}) {
+  await assignRecipesToLists({
+    databaseId: configData["NOTION_DB"],
+    boardId: configData["TRELLO_BOARD_ID"],
+    mergeIngredients: options.mergeIngredients,
+  });
+}
+
+if (import.meta.main) {
+  await randomizeRecipes({
+    mergeIngredients: true,
+  });
+}
