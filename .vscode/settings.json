@@ -3,5 +3,5 @@
   "deno.enable": true,
   "[typescript]": {
     "editor.defaultFormatter": "denoland.vscode-deno"
-  },
+  }
 }

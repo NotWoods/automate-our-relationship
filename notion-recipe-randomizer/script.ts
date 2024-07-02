@@ -303,7 +303,9 @@ async function assignRecipesToLists(options: {
   await groceryListDone;
 }
 
-export async function randomizeRecipes(options: {mergeIngredients?: boolean} = {}) {
+export async function randomizeRecipes(
+  options: { mergeIngredients?: boolean } = {},
+) {
   await assignRecipesToLists({
     databaseId: configData["NOTION_DB"],
     boardId: configData["TRELLO_BOARD_ID"],

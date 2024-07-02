@@ -12,7 +12,7 @@ export type InstantsToStrings<T> = {
     // objects -> recursion
     // deno-lint-ignore ban-types
     : T[K] extends object ? InstantsToStrings<T[K]>
-      // fallback to same type
+    // fallback to same type
     : T[K];
 };
 

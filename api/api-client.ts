@@ -110,7 +110,7 @@ export abstract class ApiClient {
       } catch {
         error = new Error(responseText);
       }
-      throw error
+      throw error;
     }
   }
 }
